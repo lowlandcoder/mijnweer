@@ -2,10 +2,11 @@
 
 const REFRESH_INTERVAL = 5 * 60 * 1000;
 const API_URL = 'https://api.open-meteo.com/v1/forecast';
+const LOCATIE = { naam: 'Haarlem', latitude: 52.40676476672234, longitude: 4.64488330557567 };
 const $ = selector => document.querySelector(selector);
 const elements = {
   statusPanel: $('#status-panel'), statusTitle: $('#status-title'), statusMessage: $('#status-message'),
-  retryButton: $('#retry-button'), refreshButton: $('#refresh-button'), weatherContent: $('#weather-content'),
+  retryButton: $('#retry-button'), refreshButton: $('#refresh-button'), weatherContent: $('#weather-content'), weatherDetails: $('#weather-details'),
   temperature: $('#temperature'), apparentTemperature: $('#apparent-temperature'), description: $('#weather-description'),
   weatherIcon: $('#weather-icon'), windSpeed: $('#wind-speed'), windDirection: $('#wind-direction'),
   beaufort: $('#beaufort'), humidity: $('#humidity'), pressure: $('#pressure'),
@@ -61,30 +62,18 @@ function setStatus(title,message,isError=false) {
   elements.retryButton.hidden=!isError;
   elements.statusPanel.hidden=false;
   elements.weatherContent.hidden=true;
+  if(elements.weatherDetails) elements.weatherDetails.hidden=true;
 }
 
 function showError(message) { setStatus('Weer niet beschikbaar',message,true); }
 
 function requestLocation() {
   clearInterval(refreshTimer);
-  if(!navigator.geolocation) {
-    showError('Je browser ondersteunt geen locatiebepaling. Gebruik een recente browser.');
-    return;
-  }
-  setStatus('Locatie opvragen…','Geef toestemming wanneer je browser daarom vraagt.');
-  navigator.geolocation.getCurrentPosition(position=>{
-    coordinates={latitude:position.coords.latitude,longitude:position.coords.longitude};
-    elements.locationLabel.textContent=`${coordinates.latitude.toFixed(2)}°, ${coordinates.longitude.toFixed(2)}°`;
-    fetchWeather();
-    refreshTimer=setInterval(fetchWeather,REFRESH_INTERVAL);
-  },error=>{
-    const messages={
-      1:'Locatietoegang is geweigerd. Sta locatiegebruik toe in je browser en probeer opnieuw.',
-      2:'Je locatie kon niet worden bepaald. Controleer je verbinding en probeer opnieuw.',
-      3:'Het bepalen van je locatie duurde te lang. Probeer het opnieuw.'
-    };
-    showError(messages[error.code]||'Er ging iets mis bij het bepalen van je locatie.');
-  },{enableHighAccuracy:false,timeout:12000,maximumAge:10*60*1000});
+  setStatus('Weer ophalen...', 'Een moment geduld.');
+  coordinates = { latitude: LOCATIE.latitude, longitude: LOCATIE.longitude };
+  elements.locationLabel.textContent = LOCATIE.naam;
+  fetchWeather();
+  refreshTimer = setInterval(fetchWeather, REFRESH_INTERVAL);
 }
 
 async function fetchWeather() {
@@ -129,9 +118,130 @@ function renderWeather(current,timezone) {
   elements.lastUpdate.textContent=updateTime.toLocaleString('nl-NL',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'})+(timezone?` ${timezone}`:'');
   elements.statusPanel.hidden=true;
   elements.weatherContent.hidden=false;
+  if(elements.weatherDetails) elements.weatherDetails.hidden=false;
 }
 
 elements.retryButton.addEventListener('click',requestLocation);
 elements.refreshButton.addEventListener('click',()=>coordinates?fetchWeather():requestLocation());
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&coordinates) fetchWeather();});
 requestLocation();
+
+/* ── Temperatuurverloop afgelopen 3 dagen (vaste woonplaats) ── */
+const HUIS = LOCATIE;
+
+/* Tekent donkere banden achter de nachturen (is_day === 0). */
+const nachtBanden = {
+  id: 'nachtBanden',
+  beforeDatasetsDraw(chart, args, opts) {
+    const isDay = opts && opts.isDay;
+    if (!isDay || !isDay.length) return;
+    const x = chart.scales.x, area = chart.chartArea, ctx = chart.ctx;
+    const stap = isDay.length > 1 ? (x.getPixelForValue(1) - x.getPixelForValue(0)) : (area.right - area.left);
+    ctx.save();
+    ctx.fillStyle = 'rgba(8, 18, 39, .5)';
+    let start = null;
+    for (let i = 0; i <= isDay.length; i++) {
+      const nacht = i < isDay.length && isDay[i] === 0;
+      if (nacht && start === null) start = i;
+      if (!nacht && start !== null) {
+        const links = Math.max(area.left, x.getPixelForValue(start) - stap / 2);
+        const rechts = Math.min(area.right, x.getPixelForValue(i - 1) + stap / 2);
+        ctx.fillRect(links, area.top, rechts - links, area.bottom - area.top);
+        start = null;
+      }
+    }
+    ctx.restore();
+  }
+};
+
+async function tekenTempHistorie() {
+  const canvas = document.getElementById('tempChart');
+  const melding = document.getElementById('temp-melding');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  const params = new URLSearchParams({
+    latitude: HUIS.latitude, longitude: HUIS.longitude,
+    hourly: 'temperature_2m,is_day', past_days: 3, forecast_days: 1, timezone: 'auto'
+  });
+
+  try {
+    const response = await fetch(`${API_URL}?${params}`);
+    if (!response.ok) throw new Error(`Open-Meteo status ${response.status}`);
+    const data = await response.json();
+    const tijden = data.hourly && data.hourly.time;
+    const temps = data.hourly && data.hourly.temperature_2m;
+    const dagNacht = data.hourly && data.hourly.is_day;
+    if (!tijden || !temps) throw new Error('Uurgegevens ontbreken');
+
+    // Alleen tonen tot en met het huidige moment
+    const nu = Date.now();
+    const punten = [];
+    for (let i = 0; i < tijden.length; i++) {
+      const t = new Date(tijden[i]);
+      if (t.getTime() <= nu) punten.push({ t: t, temp: temps[i], dag: dagNacht ? dagNacht[i] : 1 });
+    }
+    if (!punten.length) throw new Error('Geen gegevens binnen bereik');
+
+    const dagNamen = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
+    const labels = punten.map(p =>
+      dagNamen[p.t.getDay()] + ' ' + String(p.t.getHours()).padStart(2, '0') + ':00');
+    const isDays = punten.map(p => p.dag);
+
+    new Chart(canvas, {
+      type: 'line',
+      plugins: [nachtBanden],
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Temperatuur (°C)',
+          data: punten.map(p => p.temp),
+          borderColor: '#4dabf7',
+          backgroundColor: 'rgba(77,171,247,.15)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.35,
+          pointRadius: 0,
+          pointHoverRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          nachtBanden: { isDay: isDays },
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: items => {
+                const p = punten[items[0].dataIndex];
+                return p.t.toLocaleString('nl-NL', {
+                  weekday: 'short', day: '2-digit', month: 'short',
+                  hour: '2-digit', minute: '2-digit'
+                });
+              },
+              label: item => ' ' + (Math.round(item.parsed.y * 10) / 10) + ' °C'
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#9db0c9', maxRotation: 0, autoSkip: true, maxTicksLimit: 7 },
+            grid: { display: false }
+          },
+          y: {
+            ticks: { color: '#9db0c9', callback: v => v + '°' },
+            grid: { color: 'rgba(255,255,255,.08)' }
+          }
+        }
+      }
+    });
+
+    if (melding) melding.hidden = true;
+  } catch (error) {
+    console.error(error);
+    if (melding) melding.hidden = false;
+  }
+}
+
+tekenTempHistorie();
