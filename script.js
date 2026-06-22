@@ -129,7 +129,7 @@ requestLocation();
 /* ── Temperatuurverloop afgelopen 3 dagen (vaste woonplaats) ── */
 const HUIS = LOCATIE;
 
-/* Tekent donkere banden achter de nachturen (is_day === 0). */
+/* Tekent banden achter de grafiek: nacht donker, dag licht (is_day). */
 const nachtBanden = {
   id: 'nachtBanden',
   beforeDatasetsDraw(chart, args, opts) {
@@ -137,17 +137,16 @@ const nachtBanden = {
     if (!isDay || !isDay.length) return;
     const x = chart.scales.x, area = chart.chartArea, ctx = chart.ctx;
     const stap = isDay.length > 1 ? (x.getPixelForValue(1) - x.getPixelForValue(0)) : (area.right - area.left);
+    const kleur = { 0: 'rgba(0, 0, 0, .40)', 1: 'rgba(125, 180, 255, .08)' };
     ctx.save();
-    ctx.fillStyle = 'rgba(8, 18, 39, .5)';
-    let start = null;
-    for (let i = 0; i <= isDay.length; i++) {
-      const nacht = i < isDay.length && isDay[i] === 0;
-      if (nacht && start === null) start = i;
-      if (!nacht && start !== null) {
+    let start = 0;
+    for (let i = 1; i <= isDay.length; i++) {
+      if (i === isDay.length || isDay[i] !== isDay[start]) {
         const links = Math.max(area.left, x.getPixelForValue(start) - stap / 2);
         const rechts = Math.min(area.right, x.getPixelForValue(i - 1) + stap / 2);
+        ctx.fillStyle = kleur[isDay[start]] || kleur[1];
         ctx.fillRect(links, area.top, rechts - links, area.bottom - area.top);
-        start = null;
+        start = i;
       }
     }
     ctx.restore();
