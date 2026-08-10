@@ -244,3 +244,117 @@ async function tekenTempHistorie() {
 }
 
 tekenTempHistorie();
+
+/* ── Verwachting komende 7 dagen ── */
+const DAG_KORT = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
+const WIND_KORT = ['N', 'NO', 'O', 'ZO', 'Z', 'ZW', 'W', 'NW'];
+
+/* Pijl die de richting aangeeft waar de wind heen waait, net als op de weerkaart. */
+function windPijl(graden) {
+  const draai = Math.round(graden) + 180;
+  return `<svg class="wind-pijl" viewBox="0 0 32 32" aria-hidden="true">` +
+    `<g transform="rotate(${draai} 16 16)">` +
+    `<path d="M16 3 L26 27 L16 21 L6 27 Z" fill="currentColor"/>` +
+    `</g></svg>`;
+}
+
+function windKort(graden) {
+  return WIND_KORT[Math.round(graden / 45) % 8];
+}
+
+/* Bouwt de SVG met de rode maximumlijn en de blauwe minimumlijn. */
+function tekenTempLijnen(dagen) {
+  const breedte = dagen.length * 100;
+  const hoogte = 210;
+  const waarden = dagen.flatMap(d => [d.max, d.min]);
+  const boven = Math.max(...waarden);
+  const onder = Math.min(...waarden);
+  const marge = Math.max(1, (boven - onder) * 0.15);
+  const schaalBoven = boven + marge;
+  const schaalOnder = onder - marge;
+  const y = waarde => 40 + (schaalBoven - waarde) / (schaalBoven - schaalOnder || 1) * 130;
+  const x = i => 50 + i * 100;
+
+  const lijn = sleutel => dagen.map((d, i) => `${x(i)},${y(d[sleutel])}`).join(' ');
+
+  const punten = (sleutel, kleur, boventekst) => dagen.map((d, i) => {
+    const py = y(d[sleutel]);
+    const ty = boventekst ? py - 16 : py + 30;
+    return `<circle cx="${x(i)}" cy="${py}" r="5" fill="${kleur}"/>` +
+      `<text x="${x(i)}" y="${ty}" text-anchor="middle" class="lijn-label" fill="${kleur}">${Math.round(d[sleutel])}°</text>`;
+  }).join('');
+
+  return `<svg class="verwachting-lijnen" viewBox="0 0 ${breedte} ${hoogte}" role="img" aria-label="Verloop van de hoogste en laagste temperatuur">
+    <polyline points="${lijn('max')}" fill="none" stroke="#ff5a5a" stroke-width="3" stroke-linejoin="round"/>
+    <polyline points="${lijn('min')}" fill="none" stroke="#4dabf7" stroke-width="3" stroke-linejoin="round"/>
+    ${punten('max', '#ff5a5a', true)}
+    ${punten('min', '#4dabf7', false)}
+  </svg>`;
+}
+
+async function tekenVerwachting() {
+  const raster = document.getElementById('verwachting-raster');
+  const melding = document.getElementById('verwachting-melding');
+  if (!raster) return;
+
+  const params = new URLSearchParams({
+    latitude: HUIS.latitude, longitude: HUIS.longitude,
+    daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant',
+    wind_speed_unit: 'kmh', forecast_days: 7, timezone: 'auto'
+  });
+
+  try {
+    const response = await fetch(`${API_URL}?${params}`);
+    if (!response.ok) throw new Error(`Open-Meteo status ${response.status}`);
+    const data = await response.json();
+    const d = data.daily;
+    if (!d || !d.time || !d.time.length) throw new Error('Daggegevens ontbreken');
+
+    const dagen = d.time.map((datum, i) => ({
+      datum: new Date(datum + 'T12:00:00'),
+      code: d.weather_code[i],
+      max: d.temperature_2m_max[i],
+      min: d.temperature_2m_min[i],
+      neerslag: d.precipitation_sum[i] || 0,
+      wind: d.wind_speed_10m_max[i],
+      richting: d.wind_direction_10m_dominant[i]
+    }));
+
+    const meesteNeerslag = Math.max(1, ...dagen.map(x => x.neerslag));
+
+    const kop = dagen.map(x => {
+      const [omschrijving, soort] = weatherCodes[x.code] || ['Onbekend', 'cloud'];
+      const dag = DAG_KORT[x.datum.getDay()];
+      const datum = String(x.datum.getDate()).padStart(2, '0') + '-' +
+        String(x.datum.getMonth() + 1).padStart(2, '0');
+      return `<div class="verwachting-kolom">
+        <span class="v-dag">${dag}</span>
+        <span class="v-datum">${datum}</span>
+        <span class="v-icoon" title="${omschrijving}">${getWeatherIcon(soort, true)}</span>
+      </div>`;
+    }).join('');
+
+    const voet = dagen.map(x => {
+      const hoogte = Math.round(x.neerslag / meesteNeerslag * 34);
+      const mm = x.neerslag.toFixed(1).replace('.', ',');
+      const bft = toBeaufort(x.wind);
+      return `<div class="verwachting-kolom">
+        <span class="v-balk-vak"><span class="v-balk${x.neerslag > 0 ? '' : ' leeg'}" style="height:${Math.max(hoogte, 3)}px"></span></span>
+        <span class="v-mm">${mm} mm</span>
+        <span class="v-wind">${windPijl(x.richting)}<span class="v-wind-tekst">${windKort(x.richting)}${bft}</span></span>
+      </div>`;
+    }).join('');
+
+    raster.innerHTML =
+      `<div class="verwachting-rij">${kop}</div>` +
+      tekenTempLijnen(dagen) +
+      `<div class="verwachting-rij">${voet}</div>`;
+
+    if (melding) melding.hidden = true;
+  } catch (error) {
+    console.error(error);
+    if (melding) melding.hidden = false;
+  }
+}
+
+tekenVerwachting();
