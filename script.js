@@ -262,6 +262,55 @@ function windKort(graden) {
   return WIND_KORT[Math.round(graden / 45) % 8];
 }
 
+/* Zwaarte van een symboolsoort, gebruikt bij een gelijk aantal uren. */
+const SOORT_RANG = { sun: 0, partly: 1, cloud: 2, fog: 3, rain: 4, snow: 5, storm: 6 };
+const NEERSLAG_SOORTEN = ['rain', 'snow', 'storm'];
+
+function soortVanCode(code) {
+  return (weatherCodes[code] || ['Onbekende weersituatie', 'cloud'])[1];
+}
+
+/* Zet de uurgegevens om in een lijst weercodes per datum, alleen voor de uren
+   met daglicht. De dagcode van Open-Meteo is namelijk de zwaarste situatie van
+   het hele etmaal, dus ook van de nacht. */
+function uurcodesOverdag(uur) {
+  const perDag = {};
+  if (!uur || !uur.time || !uur.weather_code) return perDag;
+  for (let i = 0; i < uur.time.length; i++) {
+    if (uur.is_day && !uur.is_day[i]) continue;
+    const datum = uur.time[i].slice(0, 10);
+    (perDag[datum] = perDag[datum] || []).push(uur.weather_code[i]);
+  }
+  return perDag;
+}
+
+/* Kiest het symbool dat het beste past bij wat er overdag te zien is.
+   Bij minder dan twee uren neerslag wegen die uren niet mee, zodat één bui
+   een verder zonnige dag geen regensymbool geeft. Zijn er twee of meer uren
+   neerslag, dan telt juist alleen die neerslag. */
+function dagSymbool(uurcodes, terugval) {
+  if (!uurcodes || !uurcodes.length) return terugval;
+  const nat = code => NEERSLAG_SOORTEN.indexOf(soortVanCode(code)) !== -1;
+  const natteUren = uurcodes.filter(nat).length;
+  const keuze = uurcodes.filter(code => natteUren >= 2 ? nat(code) : !nat(code));
+  const lijst = keuze.length ? keuze : uurcodes;
+
+  const telling = new Map();
+  lijst.forEach(code => telling.set(code, (telling.get(code) || 0) + 1));
+
+  let beste = lijst[0];
+  let besteAantal = 0;
+  telling.forEach((aantal, code) => {
+    const rang = SOORT_RANG[soortVanCode(code)] || 0;
+    const besteRang = SOORT_RANG[soortVanCode(beste)] || 0;
+    if (aantal > besteAantal || (aantal === besteAantal && rang > besteRang)) {
+      beste = code;
+      besteAantal = aantal;
+    }
+  });
+  return beste;
+}
+
 /* Bouwt de SVG met de rode maximumlijn en de blauwe minimumlijn. */
 function tekenTempLijnen(dagen) {
   const breedte = dagen.length * 100;
@@ -300,6 +349,7 @@ async function tekenVerwachting() {
   const params = new URLSearchParams({
     latitude: HUIS.latitude, longitude: HUIS.longitude,
     daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant',
+    hourly: 'weather_code,is_day',
     wind_speed_unit: 'kmh', forecast_days: 7, timezone: 'auto'
   });
 
@@ -310,9 +360,11 @@ async function tekenVerwachting() {
     const d = data.daily;
     if (!d || !d.time || !d.time.length) throw new Error('Daggegevens ontbreken');
 
+    const overdag = uurcodesOverdag(data.hourly);
+
     const dagen = d.time.map((datum, i) => ({
       datum: new Date(datum + 'T12:00:00'),
-      code: d.weather_code[i],
+      code: dagSymbool(overdag[datum], d.weather_code[i]),
       max: d.temperature_2m_max[i],
       min: d.temperature_2m_min[i],
       neerslag: d.precipitation_sum[i] || 0,
