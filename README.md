@@ -63,8 +63,10 @@ browser die regel overslaat. Nalopen kan met `file style.css`, dat hoort
 `ASCII text` te melden en niet `data`.
 
 **Het symbool klopt niet met wat er buiten te zien is.** Zie het kopje "Het
-symbool per dag". Blijkt het symbool alsnog te somber, dan is de drempel van
-twee uren neerslag in `dagSymbool()` de plek om aan te draaien.
+symbool per dag". De knoppen om aan te draaien zitten allemaal in
+`dagVerwachting()`: het aantal uren neerslag in stap 3 en 4, en de grenzen voor
+de bewolking in stap 6. De tekst onder het symbool, zichtbaar bij het aanwijzen,
+zegt welke uitkomst is gekozen.
 
 ## Opbouw van de pagina
 
@@ -84,20 +86,41 @@ wind vandaan komt, dus er wordt 180 graden bij opgeteld.
 Het weersymbool komt niet uit `daily.weather_code`. Dat veld geeft de zwaarste
 situatie van het hele etmaal, dus een verder zonnige dag krijgt een wolk of een
 bui door een paar uur in de nacht. Daarom worden ook de uurgegevens opgehaald
-(`hourly=weather_code,is_day`) en wordt het symbool berekend in `dagSymbool()`:
+(`hourly=weather_code,cloud_cover,is_day`). De functie `urenOverdag()` houdt
+alleen de uren met daglicht over (`is_day` is 1) en `dagVerwachting()` kiest
+daaruit het symbool, in deze volgorde:
 
-1. Alleen de uren met daglicht tellen mee (`is_day` is 1).
-2. Is er in minder dan twee van die uren neerslag, dan wegen die uren niet mee.
-   Eén bui geeft een verder zonnige dag dus geen regensymbool.
-3. Is er in twee uren of meer neerslag, dan telt juist alleen die neerslag.
-4. Uit de overgebleven uren wint de code die het vaakst voorkomt. Bij een gelijk
-   aantal wint de zwaarste situatie, volgens de volgorde zon, zon met wolk,
-   wolk, mist, regen, sneeuw, onweer.
+| Stap | Regel | Uitkomst |
+|---|---|---|
+| 1 | onweer in een uur of meer | `sunstorm`, of `storm` bij 80 procent bewolking of meer |
+| 2 | sneeuw in twee uren of meer | `sunsnow`, of `snow` bij veel bewolking |
+| 3 | neerslag in vier uren of meer, of meer dan 5 mm op de dag | `rain` |
+| 4 | neerslag in een tot drie uren | `sunshower`, of `rain` bij veel bewolking |
+| 5 | mist in drie uren of meer | `fog` |
+| 6 | anders de gemiddelde bewolking overdag | onder 20 procent `sun`, onder 50 `partly`, onder 80 `halfcloud`, daarboven `cloud` |
 
-Ontbreken de uurgegevens, dan valt de pagina terug op `daily.weather_code`.
+De grens van 80 procent bewolking bepaalt dus of de zon in het symbool
+meekomt. Bij een dichte lucht heeft een zonnetje naast de bui geen zin.
 
-De WMO-codes worden vertaald in de tabel `weatherCodes` bovenin `script.js`.
-Er wordt dus geen bewolkingspercentage gebruikt.
+De symbolen worden getekend door `getWeatherIcon()`, uit vaste bouwstenen:
+
+| Soort | Tekening |
+|---|---|
+| `sun` | zon, of maan buiten de dagperiode |
+| `partly` | zon met een kleine wolk |
+| `halfcloud` | wolk met de zon er half achter |
+| `cloud` | wolk |
+| `fog` | drie horizontale strepen |
+| `sunshower` | zon, wolk en twee druppels |
+| `rain` | wolk met drie druppels |
+| `sunstorm` | zon, wolk en bliksem |
+| `storm` | wolk met bliksem |
+| `sunsnow` | zon, wolk en vlokken |
+| `snow` | wolk met vlokken |
+
+Ontbreken de uurgegevens, dan valt de pagina terug op `daily.weather_code` via
+de tabel `weatherCodes` bovenin `script.js`. Ontbreekt alleen `cloud_cover`,
+dan wordt de bewolking geschat uit de weercodes met `SOORT_BEWOLKING`.
 
 ## Databron
 

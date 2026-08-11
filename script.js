@@ -31,16 +31,24 @@ function getWeatherIcon(type, isDay) {
   const moon='<path d="M89 70a35 35 0 0 1-41-45 35 35 0 1 0 41 45Z" fill="#dceaff"/>';
   const cloud='<path d="M38 96h61c17 0 26-10 26-23s-10-23-24-23c-5-16-18-25-34-25-20 0-35 15-37 34-13 1-22 8-22 19 0 11 10 18 30 18Z" fill="#d9e8f4"/>';
   const drops='<g stroke="#66d9ff" stroke-width="6" stroke-linecap="round"><path d="m39 108-7 13M68 108l-7 13M97 108l-7 13"/></g>';
+  const bui='<g stroke="#66d9ff" stroke-width="6" stroke-linecap="round"><path d="m54 108-7 13M86 108l-7 13"/></g>';
   const flakes='<g fill="#d9f5ff" font-size="24" font-family="sans-serif"><text x="25" y="127">✦</text><text x="58" y="132">✦</text><text x="91" y="124">✦</text></g>';
   const bolt='<path d="m74 91-18 30h17l-6 25 30-38H79l10-17Z" fill="#ffd45c"/>';
   const fog='<g stroke="#d9e8f4" stroke-width="7" stroke-linecap="round" opacity=".85"><path d="M20 70h96M31 91h91M17 112h83"/></g>';
+  const licht = isDay ? sun : moon;
+  // Kleinere zon of maan naast een wolk, zodat beide zichtbaar blijven.
+  const klein = (x, y, s) => `<g transform="translate(${x},${y}) scale(${s})">${licht}</g>`;
   let content = fog;
-  if(type==='sun') content=isDay?sun:moon;
-  if(type==='partly') content=`${isDay?sun:moon}${cloud}`;
+  if(type==='sun') content=licht;
+  if(type==='partly') content=`${klein(6,-2,.9)}<g transform="translate(20,34) scale(.68)">${cloud}</g>`;
+  if(type==='halfcloud') content=`${klein(30,-6,.7)}${cloud}`;
   if(type==='cloud') content=cloud;
   if(type==='rain') content=`${cloud}${drops}`;
+  if(type==='sunshower') content=`${klein(30,-10,.68)}${cloud}${bui}`;
   if(type==='snow') content=`${cloud}${flakes}`;
+  if(type==='sunsnow') content=`${klein(30,-10,.68)}${cloud}${flakes}`;
   if(type==='storm') content=`${cloud}${bolt}`;
+  if(type==='sunstorm') content=`${klein(28,-12,.62)}${cloud}${bolt}`;
   return `<svg viewBox="0 0 140 150">${content}</svg>`;
 }
 
@@ -262,53 +270,72 @@ function windKort(graden) {
   return WIND_KORT[Math.round(graden / 45) % 8];
 }
 
-/* Zwaarte van een symboolsoort, gebruikt bij een gelijk aantal uren. */
-const SOORT_RANG = { sun: 0, partly: 1, cloud: 2, fog: 3, rain: 4, snow: 5, storm: 6 };
-const NEERSLAG_SOORTEN = ['rain', 'snow', 'storm'];
+/* Omschrijving per symboolsoort, gebruikt als bijschrift bij het symbool. */
+const SOORT_TEKST = {
+  sun: 'Onbewolkt', partly: 'Licht bewolkt', halfcloud: 'Half bewolkt',
+  cloud: 'Bewolkt', fog: 'Mist', sunshower: 'Opklaringen met een bui',
+  rain: 'Regen', sunstorm: 'Bui met onweer', storm: 'Onweer',
+  snow: 'Sneeuw', sunsnow: 'Sneeuwbui'
+};
+
+/* Bewolking bij een weercode, gebruikt als het uurveld cloud_cover ontbreekt. */
+const SOORT_BEWOLKING = { sun: 5, partly: 40, cloud: 95, fog: 95, rain: 95, snow: 95, storm: 95 };
 
 function soortVanCode(code) {
   return (weatherCodes[code] || ['Onbekende weersituatie', 'cloud'])[1];
 }
 
-/* Zet de uurgegevens om in een lijst weercodes per datum, alleen voor de uren
-   met daglicht. De dagcode van Open-Meteo is namelijk de zwaarste situatie van
-   het hele etmaal, dus ook van de nacht. */
-function uurcodesOverdag(uur) {
+/* Zet de uurgegevens om in weercodes en bewolkingspercentages per datum, alleen
+   voor de uren met daglicht. De dagcode van Open-Meteo is namelijk de zwaarste
+   situatie van het hele etmaal, dus ook van de nacht. Een bui om drie uur 's
+   nachts gaf daardoor een regensymbool bij een verder zonnige dag. */
+function urenOverdag(uur) {
   const perDag = {};
   if (!uur || !uur.time || !uur.weather_code) return perDag;
   for (let i = 0; i < uur.time.length; i++) {
     if (uur.is_day && !uur.is_day[i]) continue;
     const datum = uur.time[i].slice(0, 10);
-    (perDag[datum] = perDag[datum] || []).push(uur.weather_code[i]);
+    const dag = perDag[datum] = perDag[datum] || { codes: [], bewolking: [] };
+    dag.codes.push(uur.weather_code[i]);
+    if (uur.cloud_cover && uur.cloud_cover[i] !== null && uur.cloud_cover[i] !== undefined) {
+      dag.bewolking.push(uur.cloud_cover[i]);
+    }
   }
   return perDag;
 }
 
 /* Kiest het symbool dat het beste past bij wat er overdag te zien is.
-   Bij minder dan twee uren neerslag wegen die uren niet mee, zodat één bui
-   een verder zonnige dag geen regensymbool geeft. Zijn er twee of meer uren
-   neerslag, dan telt juist alleen die neerslag. */
-function dagSymbool(uurcodes, terugval) {
-  if (!uurcodes || !uurcodes.length) return terugval;
-  const nat = code => NEERSLAG_SOORTEN.indexOf(soortVanCode(code)) !== -1;
-  const natteUren = uurcodes.filter(nat).length;
-  const keuze = uurcodes.filter(code => natteUren >= 2 ? nat(code) : !nat(code));
-  const lijst = keuze.length ? keuze : uurcodes;
+   De volgorde is: onweer, sneeuw, doorgaande regen, een enkele bui, mist, en
+   anders de gemiddelde bewolking. Blijft de bewolking onder de 80 procent, dan
+   wint de variant met zon, want dan is er tussen de buien door ook zon. */
+function dagVerwachting(uren, terugvalCode, neerslagsom) {
+  if (!uren || !uren.codes.length) {
+    const soort = soortVanCode(terugvalCode);
+    return { soort: soort, omschrijving: SOORT_TEKST[soort] || 'Onbekende weersituatie' };
+  }
 
-  const telling = new Map();
-  lijst.forEach(code => telling.set(code, (telling.get(code) || 0) + 1));
+  const soorten = uren.codes.map(soortVanCode);
+  const tel = naam => soorten.filter(s => s === naam).length;
 
-  let beste = lijst[0];
-  let besteAantal = 0;
-  telling.forEach((aantal, code) => {
-    const rang = SOORT_RANG[soortVanCode(code)] || 0;
-    const besteRang = SOORT_RANG[soortVanCode(beste)] || 0;
-    if (aantal > besteAantal || (aantal === besteAantal && rang > besteRang)) {
-      beste = code;
-      besteAantal = aantal;
-    }
-  });
-  return beste;
+  const bewolking = uren.bewolking.length
+    ? uren.bewolking.reduce((a, b) => a + b, 0) / uren.bewolking.length
+    : soorten.reduce((a, s) => a + (SOORT_BEWOLKING[s] || 95), 0) / soorten.length;
+  const dicht = bewolking >= 80;
+
+  const natteUren = tel('rain');
+  let soort;
+
+  if (tel('storm') >= 1) soort = dicht ? 'storm' : 'sunstorm';
+  else if (tel('snow') >= 2) soort = dicht ? 'snow' : 'sunsnow';
+  else if (natteUren >= 4 || neerslagsom > 5) soort = 'rain';
+  else if (natteUren >= 1) soort = dicht ? 'rain' : 'sunshower';
+  else if (tel('fog') >= 3) soort = 'fog';
+  else if (bewolking < 20) soort = 'sun';
+  else if (bewolking < 50) soort = 'partly';
+  else if (bewolking < 80) soort = 'halfcloud';
+  else soort = 'cloud';
+
+  return { soort: soort, omschrijving: SOORT_TEKST[soort], bewolking: Math.round(bewolking) };
 }
 
 /* Bouwt de SVG met de rode maximumlijn en de blauwe minimumlijn. */
@@ -349,7 +376,7 @@ async function tekenVerwachting() {
   const params = new URLSearchParams({
     latitude: HUIS.latitude, longitude: HUIS.longitude,
     daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant',
-    hourly: 'weather_code,is_day',
+    hourly: 'weather_code,cloud_cover,is_day',
     wind_speed_unit: 'kmh', forecast_days: 7, timezone: 'auto'
   });
 
@@ -360,29 +387,33 @@ async function tekenVerwachting() {
     const d = data.daily;
     if (!d || !d.time || !d.time.length) throw new Error('Daggegevens ontbreken');
 
-    const overdag = uurcodesOverdag(data.hourly);
+    const overdag = urenOverdag(data.hourly);
 
-    const dagen = d.time.map((datum, i) => ({
-      datum: new Date(datum + 'T12:00:00'),
-      code: dagSymbool(overdag[datum], d.weather_code[i]),
-      max: d.temperature_2m_max[i],
-      min: d.temperature_2m_min[i],
-      neerslag: d.precipitation_sum[i] || 0,
-      wind: d.wind_speed_10m_max[i],
-      richting: d.wind_direction_10m_dominant[i]
-    }));
+    const dagen = d.time.map((datum, i) => {
+      const neerslag = d.precipitation_sum[i] || 0;
+      const beeld = dagVerwachting(overdag[datum], d.weather_code[i], neerslag);
+      return {
+        datum: new Date(datum + 'T12:00:00'),
+        soort: beeld.soort,
+        omschrijving: beeld.omschrijving,
+        max: d.temperature_2m_max[i],
+        min: d.temperature_2m_min[i],
+        neerslag: neerslag,
+        wind: d.wind_speed_10m_max[i],
+        richting: d.wind_direction_10m_dominant[i]
+      };
+    });
 
     const meesteNeerslag = Math.max(1, ...dagen.map(x => x.neerslag));
 
     const kop = dagen.map(x => {
-      const [omschrijving, soort] = weatherCodes[x.code] || ['Onbekend', 'cloud'];
       const dag = DAG_KORT[x.datum.getDay()];
       const datum = String(x.datum.getDate()).padStart(2, '0') + '-' +
         String(x.datum.getMonth() + 1).padStart(2, '0');
       return `<div class="verwachting-kolom">
         <span class="v-dag">${dag}</span>
         <span class="v-datum">${datum}</span>
-        <span class="v-icoon" title="${omschrijving}">${getWeatherIcon(soort, true)}</span>
+        <span class="v-icoon" title="${x.omschrijving}">${getWeatherIcon(x.soort, true)}</span>
       </div>`;
     }).join('');
 
