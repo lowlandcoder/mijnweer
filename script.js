@@ -233,7 +233,8 @@ async function tekenTempHistorie() {
         },
         scales: {
           x: {
-            ticks: { color: '#9db0c9', maxRotation: 0, autoSkip: true, maxTicksLimit: 7 },
+            // Op een smal scherm passen er minder tijdlabels naast elkaar.
+            ticks: { color: '#9db0c9', maxRotation: 0, autoSkip: true, maxTicksLimit: window.innerWidth < 560 ? 4 : 7 },
             grid: { display: false }
           },
           y: {
@@ -356,13 +357,15 @@ function tekenTempLijnen(dagen) {
   const punten = (sleutel, kleur, boventekst) => dagen.map((d, i) => {
     const py = y(d[sleutel]);
     const ty = boventekst ? py - 16 : py + 30;
-    return `<circle cx="${x(i)}" cy="${py}" r="5" fill="${kleur}"/>` +
+    return `<circle class="lijn-punt" cx="${x(i)}" cy="${py}" r="5" fill="${kleur}"/>` +
       `<text x="${x(i)}" y="${ty}" text-anchor="middle" class="lijn-label" fill="${kleur}">${Math.round(d[sleutel])}°</text>`;
   }).join('');
 
+  // De lijndikte staat in style.css. Op een smal scherm wordt de tekening
+  // sterk verkleind; daar staat een dikkere lijn ingesteld.
   return `<svg class="verwachting-lijnen" viewBox="0 0 ${breedte} ${hoogte}" role="img" aria-label="Verloop van de hoogste en laagste temperatuur">
-    <polyline points="${lijn('max')}" fill="none" stroke="#ff5a5a" stroke-width="3" stroke-linejoin="round"/>
-    <polyline points="${lijn('min')}" fill="none" stroke="#4dabf7" stroke-width="3" stroke-linejoin="round"/>
+    <polyline class="lijn" points="${lijn('max')}" stroke="#ff5a5a"/>
+    <polyline class="lijn" points="${lijn('min')}" stroke="#4dabf7"/>
     ${punten('max', '#ff5a5a', true)}
     ${punten('min', '#4dabf7', false)}
   </svg>`;

@@ -62,6 +62,12 @@ bevat; die maken van de eerstvolgende regel een ongeldige selector, waarna de
 browser die regel overslaat. Nalopen kan met `file style.css`, dat hoort
 `ASCII text` te melden en niet `data`.
 
+**Op de telefoon valt de verwachting deels buiten het scherm.** Ververs eerst
+met Ctrl+F5 of wis de gegevens van de site; de browser bewaart `style.css` en
+`script.js` een tijd in het geheugen. Blijft het staan, controleer dan of
+`.verwachting-raster` in `style.css` nog `min-width:0` heeft. Een vaste
+minimumbreedte daar dwingt zijwaarts schuiven af.
+
 **Het symbool klopt niet met wat er buiten te zien is.** Zie het kopje "Het
 symbool per dag". De knoppen om aan te draaien zitten allemaal in
 `dagVerwachting()`: het aantal uren neerslag in stap 3 en 4, en de grenzen voor
@@ -80,6 +86,33 @@ De verwachting komt uit het onderdeel `daily` van Open-Meteo, met de velden
 een eigen SVG in `script.js`, dus daar is Chart.js niet voor nodig. De windpijl
 wijst de kant op waar de wind heen waait; Open-Meteo geeft de richting waar de
 wind vandaan komt, dus er wordt 180 graden bij opgeteld.
+
+## Weergave op een telefoon
+
+De pagina past zich aan de schermbreedte aan. Er is geen zijwaartse balk en er
+hoeft niet geschoven te worden: alle zeven dagen staan naast elkaar in beeld,
+ook op een scherm van 360 pixels breed.
+
+Dat werkt zo:
+
+- Het raster van de verwachting heeft geen vaste minimumbreedte meer. De zeven
+  kolommen zijn `minmax(0, 1fr)`, zodat een lang bijschrift de rij niet breder
+  kan maken dan het scherm.
+- De maten van dagnaam, datum, symbool, neerslagbalk, millimeters en windpijl
+  staan in `clamp()`. Ze krimpen mee op een smal scherm en houden op een breed
+  scherm hun oude formaat.
+- De temperatuurlijnen zijn een SVG die meeschaalt met de breedte. Omdat die op
+  een telefoon sterk wordt verkleind, staan de lettergrootte, de lijndikte en
+  de puntgrootte onder `@media(max-width:720px)` groter ingesteld. Die waarden
+  staan in `style.css` en niet meer als attribuut in `script.js`.
+- Onder 560 pixels is de witruimte rond de kaarten kleiner, zodat er meer
+  ruimte overblijft voor de zeven kolommen.
+- De regel met de bijwerktijd breekt af over twee regels in plaats van door te
+  lopen buiten het scherm.
+
+Bij het aanpassen van deze onderdelen geldt: controleer op 360 pixels breed of
+`document.documentElement.scrollWidth` gelijk is aan `clientWidth`. Wijkt dat
+af, dan loopt er iets buiten het scherm.
 
 ## Het symbool per dag
 
