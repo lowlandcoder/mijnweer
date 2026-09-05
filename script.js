@@ -376,6 +376,70 @@ function tekenTempLijnen(dagen) {
   </svg>`;
 }
 
+/* ── Komende uren ─────────────────────────────────────────────
+   Zelfde gegevens als op het ePaper-scherm: tijd, beeld, temperatuur en de
+   neerslag in millimeters. De balk loopt tot 2 mm per uur, gelijk aan het
+   scherm, zodat beide hetzelfde beeld geven. Deze functie gebruikt de
+   gegevens die tekenVerwachting toch al ophaalt; er gaat geen extra
+   aanvraag naar Open-Meteo. */
+function tekenKomendeUren(data, aantal = 6) {
+  const raster = document.getElementById('uren-raster');
+  const melding = document.getElementById('uren-melding');
+  const samenvatting = document.getElementById('dag-samenvatting');
+  if (!raster) return;
+
+  const u = data.hourly;
+  if (!u || !u.time || !u.time.length) throw new Error('Uurgegevens ontbreken');
+
+  // Begin bij het eerstvolgende hele uur.
+  const nu = new Date();
+  const start = u.time.findIndex(x => new Date(x) > nu);
+  if (start < 0) throw new Error('Geen uren meer vooruit');
+
+  const MAX_MM = 2;
+  const uren = [];
+  for (let i = start; i < Math.min(start + aantal, u.time.length); i++) {
+    uren.push({
+      tijd: u.time[i].slice(11, 16),
+      temperatuur: u.temperature_2m[i],
+      neerslag: u.precipitation[i] || 0,
+      soort: soortVanCode(u.weather_code[i]),
+      isDag: Boolean(u.is_day[i])
+    });
+  }
+
+  const kop = uren.map(x => `<div class="verwachting-kolom">
+      <span class="v-uur">${x.tijd}</span>
+      <span class="v-icoon">${getWeatherIcon(x.soort, x.isDag)}</span>
+    </div>`).join('');
+
+  const voet = uren.map(x => {
+    const hoogte = Math.round(Math.min(x.neerslag, MAX_MM) / MAX_MM * 34);
+    const droog = x.neerslag < 0.05;
+    return `<div class="verwachting-kolom">
+      <span class="v-temp">${Math.round(x.temperatuur)}&deg;</span>
+      <span class="v-balk-vak"><span class="v-balk${droog ? ' leeg' : ''}" style="height:${Math.max(hoogte, 3)}px"></span></span>
+      <span class="v-mm">${droog ? '-' : x.neerslag.toFixed(1).replace('.', ',') + ' mm'}</span>
+    </div>`;
+  }).join('');
+
+  raster.innerHTML =
+    `<div class="verwachting-rij uren-rij">${kop}</div>` +
+    `<div class="verwachting-rij uren-rij">${voet}</div>`;
+
+  // De regel eronder: de dagrange en de zon, net als op het scherm.
+  const d = data.daily;
+  if (samenvatting && d && d.time && d.time.length) {
+    const delen = [`vandaag ${Math.round(d.temperature_2m_min[0])}\u00b0 tot ${Math.round(d.temperature_2m_max[0])}\u00b0`];
+    if (d.sunrise && d.sunset) {
+      delen.push(`zon op ${d.sunrise[0].slice(11, 16)}`, `onder ${d.sunset[0].slice(11, 16)}`);
+    }
+    samenvatting.textContent = delen.join('  \u00b7  ');
+  }
+
+  if (melding) melding.hidden = true;
+}
+
 async function tekenVerwachting() {
   const raster = document.getElementById('verwachting-raster');
   const melding = document.getElementById('verwachting-melding');
@@ -383,8 +447,8 @@ async function tekenVerwachting() {
 
   const params = new URLSearchParams({
     latitude: HUIS.latitude, longitude: HUIS.longitude,
-    daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant',
-    hourly: 'weather_code,cloud_cover,is_day',
+    daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,sunrise,sunset',
+    hourly: 'weather_code,cloud_cover,is_day,temperature_2m,precipitation',
     wind_speed_unit: 'kmh', forecast_days: 7, timezone: 'auto', models: WEERMODEL
   });
 
@@ -394,6 +458,15 @@ async function tekenVerwachting() {
     const data = await response.json();
     const d = data.daily;
     if (!d || !d.time || !d.time.length) throw new Error('Daggegevens ontbreken');
+
+    // Eerst de uren; die gebruiken dezelfde gegevens.
+    try {
+      tekenKomendeUren(data);
+    } catch (fout) {
+      console.error(fout);
+      const m = document.getElementById('uren-melding');
+      if (m) m.hidden = false;
+    }
 
     const overdag = urenOverdag(data.hourly);
 

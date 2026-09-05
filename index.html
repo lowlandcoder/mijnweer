@@ -7,7 +7,7 @@
   <meta name="description" content="Mijn actuele lokale weer, verzorgd door Open-Meteo.">
   <title>Mijn Weer</title>
   <link rel="stylesheet" href="huisstijl.css">
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=3">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -38,6 +38,15 @@
         <div id="weather-icon" class="weather-icon" aria-hidden="true"></div>
       </section>
     </div>
+
+    <section class="verwachting" aria-label="Verwachting komende uren">
+      <h2>Komende uren</h2>
+      <p id="dag-samenvatting" class="dag-samenvatting"></p>
+      <div class="verwachting-scroll">
+        <div id="uren-raster" class="verwachting-raster"></div>
+      </div>
+      <p id="uren-melding" class="temp-melding" hidden>De uurverwachting kon niet worden geladen.</p>
+    </section>
 
     <section class="verwachting" aria-label="Verwachting komende 7 dagen">
       <h2>Verwachting &mdash; komende 7 dagen</h2>
@@ -71,6 +80,6 @@
     </div>
   </main>
   <noscript>Schakel JavaScript in om het actuele weer te bekijken.</noscript>
-  <script src="script.js?v=2" defer></script>
+  <script src="script.js?v=3" defer></script>
 </body>
 </html>

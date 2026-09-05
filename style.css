@@ -20,6 +20,12 @@ h1{margin:0;font-size:clamp(5rem,14vw,8.5rem);font-weight:300;letter-spacing:-.0
    breedte van het scherm en schalen mee. Zijwaarts schuiven is niet nodig. */
 .verwachting-scroll{overflow-x:hidden}
 .verwachting-raster{min-width:0}
+/* Komende uren: zelfde raster als de zevendaagse, maar zes kolommen. */
+.uren-rij{grid-template-columns:repeat(6,minmax(0,1fr))}
+.dag-samenvatting{color:var(--muted);font-size:.85rem;margin:-6px 0 10px}
+.v-uur{font-size:clamp(.72rem,2.8vw,.95rem);font-weight:700;white-space:nowrap}
+.v-temp{font-size:clamp(.78rem,3vw,1.05rem);font-weight:700;white-space:nowrap;margin-top:2px}
+
 .verwachting-rij{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));text-align:center}
 .verwachting-kolom{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;padding:4px 1px;border-radius:12px}
 .verwachting-kolom:nth-child(even){background:rgba(255,255,255,.04)}
