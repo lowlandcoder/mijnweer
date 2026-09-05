@@ -56,6 +56,14 @@ function getWeatherIcon(type, isDay) {
   return `<svg viewBox="0 0 140 150">${content}</svg>`;
 }
 
+/* Volluit geschreven windrichting, voor de regel bij de pijl in de hero. */
+const WIND_VOLUIT = ['noorden', 'noordoosten', 'oosten', 'zuidoosten',
+                     'zuiden', 'zuidwesten', 'westen', 'noordwesten'];
+
+function windVoluit(graden) {
+  return WIND_VOLUIT[Math.round(graden / 45) % 8];
+}
+
 function formatWindDirection(degrees) {
   const labels=['N','NO','O','ZO','Z','ZW','W','NW'];
   return `${labels[Math.round(degrees/45)%8]} (${Math.round(degrees)}°)`;
@@ -125,6 +133,16 @@ function renderWeather(current,timezone) {
   elements.beaufort.textContent=toBeaufort(current.wind_speed_10m);
   elements.humidity.textContent=Math.round(current.relative_humidity_2m);
   elements.pressure.textContent=Math.round(current.pressure_msl);
+  // Windrichting groot in beeld: de pijl wijst waar de wind naartoe waait.
+  const windBlok=document.getElementById('hero-wind');
+  const windPijlVak=document.getElementById('hero-windpijl');
+  const windTekst=document.getElementById('hero-windtekst');
+  if(windBlok&&windPijlVak&&Number.isFinite(current.wind_direction_10m)){
+    windPijlVak.innerHTML=windPijl(current.wind_direction_10m);
+    if(windTekst) windTekst.textContent=
+      `wind uit het ${windVoluit(current.wind_direction_10m)}`;
+    windBlok.hidden=false;
+  }
   const updateTime=new Date();
   elements.lastUpdate.dateTime=updateTime.toISOString();
   elements.lastUpdate.textContent=updateTime.toLocaleString('nl-NL',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'})+(timezone?` ${timezone}`:'');
@@ -418,8 +436,8 @@ function tekenKomendeUren(data, aantal = 6) {
     const droog = x.neerslag < 0.05;
     return `<div class="verwachting-kolom">
       <span class="v-temp">${Math.round(x.temperatuur)}&deg;</span>
-      <span class="v-balk-vak"><span class="v-balk${droog ? ' leeg' : ''}" style="height:${Math.max(hoogte, 3)}px"></span></span>
-      <span class="v-mm">${droog ? '-' : x.neerslag.toFixed(1).replace('.', ',') + ' mm'}</span>
+      <span class="v-balk-vak">${droog ? '' : `<span class="v-balk" style="height:${Math.max(hoogte, 3)}px"></span>`}</span>
+      <span class="v-mm">${droog ? 'droog' : x.neerslag.toFixed(1).replace('.', ',') + ' mm'}</span>
     </div>`;
   }).join('');
 
