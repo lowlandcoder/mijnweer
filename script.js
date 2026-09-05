@@ -10,7 +10,7 @@ const LOCATIE = { naam: 'Haarlem', latitude: 52.40676476672234, longitude: 4.644
 const $ = selector => document.querySelector(selector);
 const elements = {
   statusPanel: $('#status-panel'), statusTitle: $('#status-title'), statusMessage: $('#status-message'),
-  retryButton: $('#retry-button'), refreshButton: $('#refresh-button'), weatherContent: $('#weather-content'), weatherDetails: $('#weather-details'),
+  retryButton: $('#retry-button'), refreshButton: $('#refresh-button'), weatherContent: $('#weather-content'),
   temperature: $('#temperature'), apparentTemperature: $('#apparent-temperature'), description: $('#weather-description'),
   weatherIcon: $('#weather-icon'), windSpeed: $('#wind-speed'), windDirection: $('#wind-direction'),
   beaufort: $('#beaufort'), humidity: $('#humidity'), pressure: $('#pressure'),
@@ -82,7 +82,6 @@ function setStatus(title,message,isError=false) {
   elements.retryButton.hidden=!isError;
   elements.statusPanel.hidden=false;
   elements.weatherContent.hidden=true;
-  if(elements.weatherDetails) elements.weatherDetails.hidden=true;
 }
 
 function showError(message) { setStatus('Weer niet beschikbaar',message,true); }
@@ -133,22 +132,19 @@ function renderWeather(current,timezone) {
   elements.beaufort.textContent=toBeaufort(current.wind_speed_10m);
   elements.humidity.textContent=Math.round(current.relative_humidity_2m);
   elements.pressure.textContent=Math.round(current.pressure_msl);
-  // Windrichting groot in beeld: de pijl wijst waar de wind naartoe waait.
-  const windBlok=document.getElementById('hero-wind');
+  // De pijl wijst de kant op waar de wind naartoe waait. De richting in
+  // letters staat er al boven, dus daar hoort geen tekst meer bij.
   const windPijlVak=document.getElementById('hero-windpijl');
-  const windTekst=document.getElementById('hero-windtekst');
-  if(windBlok&&windPijlVak&&Number.isFinite(current.wind_direction_10m)){
+  if(windPijlVak&&Number.isFinite(current.wind_direction_10m)){
     windPijlVak.innerHTML=windPijl(current.wind_direction_10m);
-    if(windTekst) windTekst.textContent=
-      `wind uit het ${windVoluit(current.wind_direction_10m)}`;
-    windBlok.hidden=false;
+    windPijlVak.setAttribute('aria-label',
+      `Wind uit het ${windVoluit(current.wind_direction_10m)}`);
   }
   const updateTime=new Date();
   elements.lastUpdate.dateTime=updateTime.toISOString();
   elements.lastUpdate.textContent=updateTime.toLocaleString('nl-NL',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'})+(timezone?` ${timezone}`:'');
   elements.statusPanel.hidden=true;
   elements.weatherContent.hidden=false;
-  if(elements.weatherDetails) elements.weatherDetails.hidden=false;
 }
 
 elements.retryButton.addEventListener('click',requestLocation);
