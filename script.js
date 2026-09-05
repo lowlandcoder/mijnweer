@@ -2,6 +2,10 @@
 
 const REFRESH_INTERVAL = 5 * 60 * 1000;
 const API_URL = 'https://api.open-meteo.com/v1/forecast';
+// HARMONIE-AROME van het KNMI, 2 km resolutie voor Nederland. Zelfde model als
+// mijnepaper, zodat beide dezelfde waarden tonen. Leeghalen of 'best_match'
+// invullen geeft de standaardkeuze van Open-Meteo, een wereldwijd model.
+const WEERMODEL = 'knmi_seamless';
 const LOCATIE = { naam: 'Haarlem', latitude: 52.40676476672234, longitude: 4.64488330557567 };
 const $ = selector => document.querySelector(selector);
 const elements = {
@@ -92,7 +96,7 @@ async function fetchWeather() {
   const params=new URLSearchParams({
     latitude:coordinates.latitude,longitude:coordinates.longitude,
     current:'temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,pressure_msl,wind_speed_10m,wind_direction_10m',
-    wind_speed_unit:'kmh',timezone:'auto'
+    wind_speed_unit:'kmh',timezone:'auto',models:WEERMODEL
   });
   try {
     const response=await fetch(`${API_URL}?${params}`);
@@ -168,7 +172,8 @@ async function tekenTempHistorie() {
 
   const params = new URLSearchParams({
     latitude: HUIS.latitude, longitude: HUIS.longitude,
-    hourly: 'temperature_2m,is_day', past_days: 3, forecast_days: 1, timezone: 'auto'
+    hourly: 'temperature_2m,is_day', past_days: 3, forecast_days: 1, timezone: 'auto',
+    models: WEERMODEL
   });
 
   try {
@@ -380,7 +385,7 @@ async function tekenVerwachting() {
     latitude: HUIS.latitude, longitude: HUIS.longitude,
     daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant',
     hourly: 'weather_code,cloud_cover,is_day',
-    wind_speed_unit: 'kmh', forecast_days: 7, timezone: 'auto'
+    wind_speed_unit: 'kmh', forecast_days: 7, timezone: 'auto', models: WEERMODEL
   });
 
   try {
