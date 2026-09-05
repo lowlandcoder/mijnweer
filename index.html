@@ -7,7 +7,7 @@
   <meta name="description" content="Mijn actuele lokale weer, verzorgd door Open-Meteo.">
   <title>Mijn Weer</title>
   <link rel="stylesheet" href="huisstijl.css">
-  <link rel="stylesheet" href="style.css?v=7">
+  <link rel="stylesheet" href="style.css?v=8">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -36,18 +36,20 @@
           <p class="feels-like">Voelt als <span id="apparent-temperature">--</span>&deg;C</p>
         </div>
 
-        <div class="hero-kolom hero-meting">
-          <p class="hero-label">Wind</p>
-          <p class="hero-waarde"><span id="wind-speed">--</span> km/u</p>
-          <p class="hero-sub"><span id="wind-direction">--</span> &middot; <span id="beaufort">--</span> Bft</p>
-          <span id="hero-windpijl" class="hero-windpijl" role="img" aria-label="Windrichting"></span>
-        </div>
+        <div class="hero-metingen">
+          <div class="hero-meting">
+            <p class="hero-label">Wind</p>
+            <p class="hero-waarde"><span id="wind-speed">--</span> km/u</p>
+            <p class="hero-sub"><span id="wind-direction">--</span> &middot; <span id="beaufort">--</span> Bft</p>
+            <span id="hero-windpijl" class="hero-windpijl" role="img" aria-label="Windrichting"></span>
+          </div>
 
-        <div class="hero-kolom hero-meting">
-          <p class="hero-label">Luchtvochtigheid</p>
-          <p class="hero-waarde"><span id="humidity">--</span>%</p>
-          <p class="hero-label hero-label-tweede">Luchtdruk</p>
-          <p class="hero-waarde"><span id="pressure">----</span> hPa</p>
+          <div class="hero-meting">
+            <p class="hero-label">Luchtvochtigheid</p>
+            <p class="hero-waarde"><span id="humidity">--</span>%</p>
+            <p class="hero-label hero-label-tweede">Luchtdruk</p>
+            <p class="hero-waarde"><span id="pressure">----</span> hPa</p>
+          </div>
         </div>
 
         <div id="weather-icon" class="weather-icon" aria-hidden="true"></div>
@@ -79,6 +81,6 @@
 
   </main>
   <noscript>Schakel JavaScript in om het actuele weer te bekijken.</noscript>
-  <script src="script.js?v=7" defer></script>
+  <script src="script.js?v=8" defer></script>
 </body>
 </html>
